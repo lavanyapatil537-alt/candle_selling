@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-cormorant: "Cormorant Garamond", Georgia, serif;
+  --font-inter: "Inter", system-ui, sans-serif;
+}
+
+body {
+  background-color: #FAF5EE;
+  color: #1C1C1C;
+  font-family: var(--font-inter);
+}
+
+@layer utilities {
+  .btn-gold {
+    @apply bg-lexi-gold text-white text-xs tracking-widest px-6 py-3 hover:bg-lexi-gold-hover transition-colors duration-200;
+  }
+  .btn-outline {
+    @apply border border-lexi-dark text-lexi-dark text-xs tracking-widest px-6 py-3 hover:bg-lexi-dark hover:text-white transition-colors duration-200;
+  }
+}
