@@ -53,7 +53,7 @@ export default function CheckoutPage() {
           total_amount: totalAmount,
           items: items.map((i) => ({
             product_id: i.product_id,
-            product_name: i.name,
+            name: i.name,
             unit_price: i.unit_price,
             quantity: i.quantity,
             subtotal: i.unit_price * i.quantity,
