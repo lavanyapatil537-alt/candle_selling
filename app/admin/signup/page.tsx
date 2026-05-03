@@ -29,6 +29,11 @@ export default function AdminSignupPage() {
     const data = await res.json();
     setLoading(false);
 
+    if (res.status === 403) {
+      setError("Registration is closed. Please contact the site owner.");
+      return;
+    }
+
     if (!res.ok) {
       setError(data.error ?? "Something went wrong.");
       return;

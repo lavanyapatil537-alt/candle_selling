@@ -24,6 +24,11 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
+    const adminCount = await AdminUser.countDocuments();
+    if (adminCount > 0) {
+      return NextResponse.json({ error: "Registration is closed." }, { status: 403 });
+    }
+
     const existing = await AdminUser.findOne({ email });
     if (existing) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
