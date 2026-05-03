@@ -1,20 +1,28 @@
 import Link from "next/link";
 import Navbar from "@/components/ui/Navbar";
 import FeaturedSection from "@/components/ui/FeaturedSection";
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import Product from "@/models/Product";
+import SiteSetting from "@/models/SiteSetting";
+import { FALLBACK_FEATURED } from "@/lib/fallback-products";
 
 export default async function HomePage() {
   let featured: { id: string; name: string; price: { toString(): string }; fragrance: string | null; image_url: string | null }[] = [];
   let config: Record<string, string> = {};
 
   try {
+    await connectDB();
     const [products, settings] = await Promise.all([
-      prisma.product.findMany({ where: { is_active: true, is_featured: true }, orderBy: { sort_order: "asc" }, take: 3 }),
-      prisma.siteSetting.findMany(),
+      Product.find({ is_active: true, is_featured: true }).sort({ sort_order: 1 }).limit(3),
+      SiteSetting.find(),
     ]);
-    featured = products;
+    featured = products.length > 0
+      ? products.map((p) => p.toJSON() as unknown as typeof featured[number])
+      : FALLBACK_FEATURED;
     config = Object.fromEntries(settings.map((s) => [s.setting_key, s.setting_value ?? ""]));
-  } catch { /* db not configured */ }
+  } catch {
+    featured = FALLBACK_FEATURED;
+  }
 
   const whatsappNumber = (config.whatsapp_number ?? "").replace(/[\s\-\(\)\+]/g, "");
   const whatsappUrl = whatsappNumber

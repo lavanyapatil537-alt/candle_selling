@@ -1,4 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import Order from "@/models/Order";
+import Product from "@/models/Product";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -8,60 +10,58 @@ export default async function DashboardPage() {
   let monthlyRevenue: { month: string; value: number }[] = [];
 
   try {
-    const [orders, pending, delivered, revenue, allOrders, itemStats] = await Promise.all([
-      prisma.order.findMany({ take: 5, orderBy: { created_at: "desc" }, include: { order_items: true } }),
-      prisma.order.count({ where: { status: "pending" } }),
-      prisma.order.count({ where: { status: "delivered" } }),
-      prisma.order.aggregate({ _sum: { total_amount: true } }),
-      prisma.order.count(),
-      prisma.orderItem.groupBy({
-        by: ["product_name"],
-        _sum: { quantity: true },
-        orderBy: { _sum: { quantity: "desc" } },
-        take: 4,
-      }),
+    await connectDB();
+
+    const [orders, pending, delivered, revenueAgg, allOrdersCount, itemStats] = await Promise.all([
+      Order.find().sort({ created_at: -1 }).limit(5),
+      Order.countDocuments({ status: "pending" }),
+      Order.countDocuments({ status: "delivered" }),
+      Order.aggregate([{ $group: { _id: null, total: { $sum: "$total_amount" } } }]),
+      Order.countDocuments(),
+      Order.aggregate([
+        { $unwind: "$order_items" },
+        { $group: { _id: "$order_items.product_name", quantity: { $sum: "$order_items.quantity" } } },
+        { $sort: { quantity: -1 } },
+        { $limit: 4 },
+      ]),
     ]);
 
-    const totalRev = Number(revenue._sum.total_amount ?? 0);
-
-    recentOrders = orders.map((o) => ({ ...o, total_amount: Number(o.total_amount) }));
+    const totalRev: number = revenueAgg[0]?.total ?? 0;
+    recentOrders = orders.map((o) => o.toJSON() as unknown as typeof recentOrders[number]);
 
     stats = {
-      totalOrders: allOrders,
+      totalOrders: allOrdersCount,
       pending,
       delivered,
       totalRevenue: totalRev,
-      avgOrderValue: allOrders > 0 ? totalRev / allOrders : 0,
+      avgOrderValue: allOrdersCount > 0 ? totalRev / allOrdersCount : 0,
     };
 
-    // Top products with image lookup
-    const productImages = await prisma.product.findMany({ select: { name: true, image_url: true } });
-    const imageMap = Object.fromEntries(productImages.map((p) => [p.name, p.image_url]));
-    topProducts = itemStats.map((i) => ({
-      product_name: i.product_name,
-      image_url: imageMap[i.product_name] ?? null,
-      totalSold: i._sum.quantity ?? 0,
+    const productImages = await Product.find({}, { name: 1, image_url: 1 }).lean();
+    const imageMap = Object.fromEntries(productImages.map((p) => [p.name as string, (p.image_url as string | null) ?? null]));
+    topProducts = (itemStats as { _id: string; quantity: number }[]).map((i) => ({
+      product_name: i._id,
+      image_url: imageMap[i._id] ?? null,
+      totalSold: i.quantity,
     }));
 
-    // Monthly revenue for last 7 months
     const now = new Date();
     const months = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
       return { label: d.toLocaleString("en-IN", { month: "short" }).toUpperCase(), year: d.getFullYear(), month: d.getMonth() };
     });
 
-    const revenueByMonth = await Promise.all(
+    monthlyRevenue = await Promise.all(
       months.map(async (m) => {
         const start = new Date(m.year, m.month, 1);
         const end = new Date(m.year, m.month + 1, 0, 23, 59, 59);
-        const agg = await prisma.order.aggregate({
-          where: { created_at: { gte: start, lte: end } },
-          _sum: { total_amount: true },
-        });
-        return { month: m.label, value: Number(agg._sum.total_amount ?? 0) };
+        const agg = await Order.aggregate([
+          { $match: { created_at: { $gte: start, $lte: end } } },
+          { $group: { _id: null, total: { $sum: "$total_amount" } } },
+        ]);
+        return { month: m.label, value: agg[0]?.total ?? 0 };
       })
     );
-    monthlyRevenue = revenueByMonth;
   } catch { /* db not configured */ }
 
   const maxRevenue = Math.max(...monthlyRevenue.map((m) => m.value), 1);
@@ -105,7 +105,6 @@ export default async function DashboardPage() {
 
       {/* Revenue Insights + Top Selling */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Revenue Chart */}
         <div className="lg:col-span-2 bg-white border border-lexi-border p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -132,7 +131,6 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Top Selling Products */}
         <div className="bg-white border border-lexi-border p-6">
           <div className="flex items-center justify-between mb-5">
             <p className="text-sm font-medium text-lexi-dark">Top Selling Products</p>
@@ -164,7 +162,6 @@ export default async function DashboardPage() {
 
       {/* Recent Activity + Recent Orders */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
         <div className="bg-white border border-lexi-border p-6">
           <div className="flex items-center justify-between mb-5">
             <p className="text-sm font-medium text-lexi-dark">Recent Activity</p>
@@ -196,7 +193,6 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        {/* Recent Orders Table */}
         <div className="bg-white border border-lexi-border">
           <div className="flex items-center justify-between px-6 py-4 border-b border-lexi-border">
             <p className="text-sm font-medium text-lexi-dark">Recent Orders</p>

@@ -1,28 +1,30 @@
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import Order from "@/models/Order";
 import OrdersTable from "@/components/admin/OrdersTable";
 
 export default async function AdminOrdersPage() {
   let orders: {
     id: string; customer_name: string; phone: string; address: string;
-    total_amount: { toString(): string }; status: string; created_at: Date;
-    order_items: { id: string; product_name: string; unit_price: { toString(): string }; quantity: number; subtotal: { toString(): string } }[];
+    total_amount: number; status: string; created_at: Date;
+    order_items: { id: string; product_name: string; unit_price: number; quantity: number; subtotal: number }[];
   }[] = [];
 
   let stats = { total: 0, pending: 0, delivered: 0, revenue: 0 };
 
   try {
-    const [allOrders, pending, delivered, revenue] = await Promise.all([
-      prisma.order.findMany({ orderBy: { created_at: "desc" }, include: { order_items: true } }),
-      prisma.order.count({ where: { status: "pending" } }),
-      prisma.order.count({ where: { status: "delivered" } }),
-      prisma.order.aggregate({ _sum: { total_amount: true } }),
+    await connectDB();
+    const [allOrders, pending, delivered, revenueAgg] = await Promise.all([
+      Order.find().sort({ created_at: -1 }),
+      Order.countDocuments({ status: "pending" }),
+      Order.countDocuments({ status: "delivered" }),
+      Order.aggregate([{ $group: { _id: null, total: { $sum: "$total_amount" } } }]),
     ]);
-    orders = allOrders;
+    orders = allOrders.map((o) => o.toJSON() as unknown as typeof orders[number]);
     stats = {
       total: allOrders.length,
       pending,
       delivered,
-      revenue: Number(revenue._sum.total_amount ?? 0),
+      revenue: revenueAgg[0]?.total ?? 0,
     };
   } catch { /* db not configured */ }
 

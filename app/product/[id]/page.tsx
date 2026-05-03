@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import Navbar from "@/components/ui/Navbar";
 import AddToCartButton from "@/components/ui/AddToCartButton";
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import Product from "@/models/Product";
 
 export default async function ProductPage({ params }: { params: { id: string } }) {
   let product = null;
   try {
-    product = await prisma.product.findUnique({ where: { id: params.id, is_active: true } });
+    await connectDB();
+    product = await Product.findOne({ _id: params.id, is_active: true }).catch(() => null);
   } catch { /* db not configured */ }
 
   if (!product) notFound();

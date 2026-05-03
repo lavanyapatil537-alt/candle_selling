@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import AdminUser from "@/models/AdminUser";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
-  if (!process.env.DATABASE_URL) {
+  if (!process.env.MONGODB_URI) {
     return NextResponse.json(
-      { error: "Database not configured. Please add DATABASE_URL to your .env.local file." },
+      { error: "Database not configured. Please add MONGODB_URI to your .env.local file." },
       { status: 503 }
     );
   }
@@ -21,23 +22,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
     }
 
-    const existing = await prisma.adminUser.findUnique({ where: { email } });
+    await connectDB();
+
+    const existing = await AdminUser.findOne({ email });
     if (existing) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
     }
 
     const password_hash = await bcrypt.hash(password, 12);
-
-    await prisma.adminUser.create({
-      data: { name, email, password_hash },
-    });
+    await AdminUser.create({ name, email, password_hash });
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
-    if (message.includes("connect") || message.includes("ECONNREFUSED") || message.includes("P1001")) {
+    if (message.includes("connect") || message.includes("ECONNREFUSED")) {
       return NextResponse.json(
-        { error: "Cannot connect to database. Check your DATABASE_URL in .env.local." },
+        { error: "Cannot connect to database. Check your MONGODB_URI in .env.local." },
         { status: 503 }
       );
     }

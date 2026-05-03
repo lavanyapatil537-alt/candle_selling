@@ -13,7 +13,7 @@ interface Product {
   image_url: string | null;
 }
 
-const ITEMS_PER_PAGE = 4;
+const ITEMS_PER_PAGE = 8;
 
 export default function CollectionGrid({ products }: { products: Product[] }) {
   const { addItem } = useCart();

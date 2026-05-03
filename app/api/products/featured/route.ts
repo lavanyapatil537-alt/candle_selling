@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import Product from "@/models/Product";
 
 export async function GET() {
-  const products = await prisma.product.findMany({
-    where: { is_featured: true },
-    orderBy: { created_at: "desc" },
-  });
+  await connectDB();
+  const products = await Product.find({ is_featured: true }).sort({ created_at: -1 });
   return NextResponse.json(products);
 }

@@ -1,10 +1,13 @@
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import Enquiry from "@/models/Enquiry";
 import EnquiriesClient from "@/components/admin/EnquiriesClient";
 
 export default async function AdminEnquiriesPage() {
   let enquiries: { id: string; name: string; email: string; message: string; is_read: boolean; created_at: Date }[] = [];
   try {
-    enquiries = await prisma.enquiry.findMany({ orderBy: { created_at: "desc" } });
+    await connectDB();
+    const docs = await Enquiry.find().sort({ created_at: -1 });
+    enquiries = docs.map((e) => e.toJSON() as unknown as typeof enquiries[number]);
   } catch { /* db not configured */ }
 
   const unread = enquiries.filter((e) => !e.is_read).length;

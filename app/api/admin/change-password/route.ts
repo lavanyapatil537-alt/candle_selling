@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth-options";
+import { connectDB } from "@/lib/mongodb";
+import AdminUser from "@/models/AdminUser";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
@@ -9,16 +10,21 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { current, next } = await req.json();
-  if (!current || !next) return NextResponse.json({ error: "Both current and new password are required." }, { status: 400 });
+  if (!current || !next) {
+    return NextResponse.json({ error: "Both current and new password are required." }, { status: 400 });
+  }
 
-  const admin = await prisma.adminUser.findUnique({ where: { email: session.user.email } });
+  await connectDB();
+
+  const admin = await AdminUser.findOne({ email: session.user.email });
   if (!admin) return NextResponse.json({ error: "Account not found." }, { status: 404 });
 
   const valid = await bcrypt.compare(current, admin.password_hash);
   if (!valid) return NextResponse.json({ error: "Current password is incorrect." }, { status: 400 });
 
   const password_hash = await bcrypt.hash(next, 12);
-  await prisma.adminUser.update({ where: { email: session.user.email }, data: { password_hash } });
+  await AdminUser.findByIdAndUpdate(admin._id, { password_hash });
 
   return NextResponse.json({ success: true });
 }
+

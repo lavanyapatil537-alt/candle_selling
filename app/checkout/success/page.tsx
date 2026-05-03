@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Navbar from "@/components/ui/Navbar";
-import { prisma } from "@/lib/prisma";
+import { connectDB } from "@/lib/mongodb";
+import SiteSetting from "@/models/SiteSetting";
 
 function getWhatsAppUrl(raw: string, message: string) {
   // strip spaces, dashes, parentheses, leading +
@@ -19,9 +20,8 @@ export default async function SuccessPage() {
   let instagram = "";
 
   try {
-    const settings = await prisma.siteSetting.findMany({
-      where: { setting_key: { in: ["whatsapp_number", "instagram_url"] } },
-    });
+    await connectDB();
+    const settings = await SiteSetting.find({ setting_key: { $in: ["whatsapp_number", "instagram_url"] } });
     settings.forEach((s) => {
       if (s.setting_key === "whatsapp_number") whatsapp = s.setting_value ?? "";
       if (s.setting_key === "instagram_url") instagram = s.setting_value ?? "";
